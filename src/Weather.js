@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
@@ -26,26 +26,30 @@ function Weather() {
   const UNSPLASH_KEY = "72D-NpzdWRCN1VHAyXV93Xn4NwnNk6ksTiw8wHa9u-o"; // Unsplash API
   // Helper: format city name
 
-  const formatCity = (name) => {
+  const formatCity = useCallback((name) => {
     if (!name) return "Delhi";
     return name
       .split(" ")
       .map((w) => w[0].toUpperCase() + w.slice(1).toLowerCase())
       .join(" ");
-  }; // Fetch weather + forecast + AQI + background
+  }, []); // Fetch weather + forecast + AQI + background
 
-  const fetchWeather = (cityName) => {
+  const fetchWeather = useCallback((cityName, callback) => {
     const formattedCity = formatCity(cityName);
+    setError(null);
+
     fetch(
       `https://api.openweathermap.org/data/2.5/weather?q=${formattedCity}&units=metric&appid=${WEATHER_KEY}`,
     )
       .then((res) => res.json())
       .then((data) => {
         if (data.cod !== 200) throw new Error(data.message);
+
         setCurrent(data);
         setCity(formattedCity);
-        setCoords({ lat: data.coord.lat, lon: data.coord.lon }); // Forecast (5-day)
+        setCoords({ lat: data.coord.lat, lon: data.coord.lon });
 
+        // Forecast (5-day)
         fetch(
           `https://api.openweathermap.org/data/2.5/forecast?q=${formattedCity}&units=metric&appid=${WEATHER_KEY}`,
         )
@@ -54,14 +58,18 @@ function Weather() {
             if (fdata.cod !== "200") throw new Error(fdata.message);
             const daily = fdata.list.filter((_, idx) => idx % 8 === 0);
             setForecast(daily);
-          }); // AQI
+          })
+          .catch((err) => setError(err.message));
 
+        // AQI
         fetch(
           `https://api.openweathermap.org/data/2.5/air_pollution?lat=${data.coord.lat}&lon=${data.coord.lon}&appid=${WEATHER_KEY}`,
         )
           .then((res) => res.json())
-          .then((aqidata) => setAqi(aqidata.list[0]?.main || null)); // Unsplash background
+          .then((aqidata) => setAqi(aqidata.list[0]?.main || null))
+          .catch(() => setAqi(null));
 
+        // Unsplash background
         const query = data.weather[0]?.main || "weather";
         fetch(
           `https://api.unsplash.com/photos/random?query=${query}&client_id=${UNSPLASH_KEY}`,
@@ -69,9 +77,16 @@ function Weather() {
           .then((res) => res.json())
           .then((imgData) => setBackground(imgData.urls?.regular))
           .catch(() => setBackground(null));
+
+        if (callback) callback(null, data);
       })
-      .catch((err) => setError(err.message));
-  }; // On load, detect user city via IP
+      .catch((err) => {
+        setError(err.message);
+        if (callback) callback(err, null);
+      });
+  }, [WEATHER_KEY, UNSPLASH_KEY, formatCity]);
+
+  // On load, detect user city via IP
 
   useEffect(() => {
     const fetchData = () => {
