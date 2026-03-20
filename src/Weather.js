@@ -98,7 +98,7 @@ function Weather() {
     fetchData();
     const interval = setInterval(fetchData, 60000); // auto-refresh
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchWeather]);
 
   const handleSearch = (e) => {
     e.preventDefault();
